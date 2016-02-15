@@ -8,11 +8,21 @@ import tempfile
 import json
 import argparse
 import csv
+import difflib
 from collections import OrderedDict
 
 class ReconcileEngine:
+    """Main engine for powering the reconciliation
+    
+    Wraps around the search itself and controls the dict that is returned (and the server then
+    converts into a JSON response)
+    
+    Search storage can be specified with the `storage` parameter
+    """
 
-    def __init__(self, source=None, source_csv=None, id_field="id", search_field="name", type="match", service_url="http://localhost:8000/", header_row=True, delimiter=",", storage='dict'):
+    def __init__(self, source=None, id_field="id", search_field="name", type="match", service_url="http://localhost:8000/", storage='dict'):
+        """Initiate the ReconcileEngine. source is either a dictionary or a CSV file
+        """
         
         # the field the will be searched by default
         self.search_field = search_field
@@ -22,32 +32,12 @@ class ReconcileEngine:
         self.type = type
         # the url of the service
         self.url = service_url
-        
-        # get data from a CSV file if needed
-        if(source==None and source_csv!=None):
-            source = self.get_from_csv(source_csv, header_row, delimiter)
             
         # setup the storage
         if(storage=="whoosh"):
             self.storage = ReconcileStorageWhoosh(source, search_field, id_field)
         else:
             self.storage = ReconcileStorageDict(source, search_field, id_field)
-        
-        
-    def get_from_csv(self, csv_file, header_row=True, delimiter=","):
-
-        source = []
-        
-        with open(csv_file, 'r') as f:
-            if(header_row):
-                reader = csv.DictReader(f, delimiter=delimiter)
-            else:
-                reader = csv.reader(f, delimiter=delimiter)
-                
-            for row in reader:
-                source.append(row)
-        
-        return source
         
     def __enter__(self):
         return self
@@ -98,13 +88,23 @@ class ReconcileEngine:
         
     def query(self, q):
     
+        # create a query and get the results from the storage engine
         q = ReconcileQuery(q)
         results = self.storage.search(q)
         
+        # sort the results by score
+        results.sort(key=lambda x: x.score, reverse=True)
+        
+        # if there's a limit on results only return those results
         if q.limit:
             results = results[0:q.limit]
             
+        # prepare each result in the JSON return format
         for i in results:
+            
+            # check if it's an exact match
+            match = q.query.lower()==i[self.search_field].lower() or i.score==100
+        
             q.add_result({
                 "id":i[self.id_field],
                 "name":i[self.search_field],
@@ -113,8 +113,12 @@ class ReconcileEngine:
                     "name": self.type
                 }],
                 "score":i.score,
-                "match":q.query.lower()==i[self.search_field].lower(),
+                "match":match,
             })
+            
+            # if we've got an exact match then just return it
+            if match:
+                return q.results
         
         return q.results
         
@@ -177,77 +181,6 @@ class ReconcileQueries:
     def add_result(self, k, q):
         self.results[k] = q
             
-class ReconcileStorageWhoosh:
-
-    def __init__(self, source, search_field, id_field):
-    
-        # the temporary directory the index will be located in
-        self.index_dir = tempfile.mkdtemp()
-        # the field the will be searched by default
-        self.search_field = search_field
-        # the field that will be used to index
-        self.id_field = id_field
-        
-        # create a schema and index
-        schema = whoosh.fields.Schema()
-        self.ix = whoosh.index.create_in(self.index_dir, schema)
-        
-        # populate the schema with fields from the first row of the source
-        self.writer = self.ix.writer()
-        for field in source[0]:
-            if( self.id_field == field ):
-                self.writer.add_field( field, whoosh.fields.ID(stored=True))
-            else:
-                self.writer.add_field( field, whoosh.fields.TEXT(stored=True))
-                
-            if(self.search_field==None and field != self.id_field):
-                self.search_field = field
-        
-        # add documents to index
-        for i in source:
-            i2 = {}
-            for k,v in i.items():
-                if( isinstance(v, str)):
-                    i2[k] = unicode(v)
-                else:
-                    i2[k] = v
-            self.writer.add_document(**i2)
-        self.writer.commit()
-        
-        self.searcher = self.ix.searcher()
-        
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.searcher.close()
-        self.ix.close()
-        shutil.rmtree(self.index_dir)
-        
-    def close(self):
-        self.__exit__()
-    
-    def search(self, q):
-        query = whoosh.qparser.QueryParser(self.search_field, self.ix.schema, termclass=whoosh.query.Variations).parse(q.query)
-        return self.searcher.search(query)
-        
-    def all(self):
-        docs = self.searcher.documents()
-        data = []
-        for d in docs:
-            data.append(d)
-        return data
-        
-    def __getattr__(self, name):
-        parser = whoosh.qparser.QueryParser(self.id_field, self.ix.schema)
-        parser.add_plugin(whoosh.qparser.FuzzyTermPlugin())
-        query = parser.parse(name)
-        results = self.searcher.search(query)
-        if(len(results)>0):
-            return results[0].fields()
-        else:
-            raise AttributeError("ReconcileStorageWhoosh instance has no attribute '%s'" % name)
-            
 class ReconcileStorageDict:
 
     def __init__(self, source, search_field, id_field):
@@ -278,9 +211,22 @@ class ReconcileStorageDict:
     def search(self, q):
         query_string = self.normalise_name(q.query)
         results = []
+        matches = []
+        
+        # check for exact matches
         if( query_string in self.docs ):
             r = ReconcileHit( self.docs[query_string], 100 )
             results.append( r )
+            matches.append( self.docs[query_string] )
+        
+        # otherwise iterate through all the docs and return anything containing the query
+        for i in self.docs:
+            if query_string in i and self.docs[i] not in matches:
+                score = difflib.SequenceMatcher(None, query_string, i)
+                score = (score.ratio() * 100)
+                r = ReconcileHit( self.docs[i], score )
+                results.append( r )
+        
         return results
         
     def all(self):
@@ -355,12 +301,83 @@ class ReconcileStorageDict:
             str = str.replace( " ","")
         
         return str                                  # return the normalised string
+            
+class ReconcileStorageWhoosh( ReconcileStorageDict ):
+
+    def __init__(self, source, search_field, id_field):
+    
+        # the temporary directory the index will be located in
+        self.index_dir = tempfile.mkdtemp()
+        # the field the will be searched by default
+        self.search_field = search_field
+        # the field that will be used to index
+        self.id_field = id_field
+        
+        # create a schema and index
+        schema = whoosh.fields.Schema()
+        self.ix = whoosh.index.create_in(self.index_dir, schema)
+        
+        # populate the schema with fields from the first row of the source
+        self.writer = self.ix.writer()
+        for field in source[0]:
+            if( self.id_field == field ):
+                self.writer.add_field( field, whoosh.fields.ID(stored=True))
+            else:
+                self.writer.add_field( field, whoosh.fields.TEXT(stored=True))
+                
+            if(self.search_field==None and field != self.id_field):
+                self.search_field = field
+        
+        # add documents to index
+        for i in source:
+            i2 = {}
+            for k,v in i.items():
+                if( isinstance(v, str)):
+                    i2[k] = unicode(v)
+                else:
+                    i2[k] = v
+            self.writer.add_document(**i2)
+        self.writer.commit()
+        
+        self.searcher = self.ix.searcher()
+        
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.searcher.close()
+        self.ix.close()
+        shutil.rmtree(self.index_dir)
+        
+    def close(self):
+        self.__exit__()
+    
+    def search(self, q):
+        query = whoosh.qparser.QueryParser(self.search_field, self.ix.schema, termclass=whoosh.query.Variations).parse(q.query)
+        return self.searcher.search(query)
+        
+    def all(self):
+        docs = self.searcher.documents()
+        data = []
+        for d in docs:
+            data.append(d)
+        return data
+        
+    def __getattr__(self, name):
+        parser = whoosh.qparser.QueryParser(self.id_field, self.ix.schema)
+        parser.add_plugin(whoosh.qparser.FuzzyTermPlugin())
+        query = parser.parse(name)
+        results = self.searcher.search(query)
+        if(len(results)>0):
+            return results[0].fields()
+        else:
+            raise AttributeError("ReconcileStorageWhoosh instance has no attribute '%s'" % name)
 
 class ReconcileHit:
     
     def __init__(self, result, score=100):
         self.result = result
-        self.score = 100
+        self.score = round( score, 2)
         
     def fields(self):
         return self.result
@@ -376,7 +393,21 @@ class ReconcileHit:
             return self.result[name]
             
         raise AttributeError("ReconcileHit instance has no attribute '%s'" % name)
+           
+def get_from_csv(csv_file, header_row=True, delimiter=","):
+
+    source = []
+    
+    with open(csv_file, 'r') as f:
+        if(header_row):
+            reader = csv.DictReader(f, delimiter=delimiter)
+        else:
+            reader = csv.reader(f, delimiter=delimiter)
             
+        for row in reader:
+            source.append(row)
+    
+    return source         
             
 def main():
 
@@ -398,12 +429,12 @@ def main():
     service_url = "http://" + args.host + ":" + str(args.port) + "/"
     if args.debug: print "Reconciliation service starting on:", service_url
     
-    with ReconcileEngine(source_csv=args.csv, 
+    source = get_from_csv( args.csv, header_row = args.header_row, delimiter = args.delimiter )
+    
+    with ReconcileEngine(source=source, 
         id_field=args.id_field, 
         search_field=args.search_field, 
         service_url = service_url,
-        header_row = args.header_row,
-        delimiter = args.delimiter,
         storage = args.storage
         ) as r:
         
