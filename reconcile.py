@@ -1,10 +1,11 @@
 import whoosh.index
 import whoosh.fields
 import whoosh.qparser
+import bottle
+
 import shutil
 import tempfile
 import json
-import bottle
 import argparse
 import csv
 from collections import OrderedDict
