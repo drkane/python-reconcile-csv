@@ -58,7 +58,7 @@ class ReconcileStorageDict:
     def all(self):
         """ return all the values
         """
-        return list(self.docs)
+        return self.docs.values()
         
     def __getattr__(self, name):
         for i in self.docs:
