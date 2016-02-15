@@ -21,7 +21,7 @@ class ReconcileEngine:
     """
 
     def __init__(self, source=None, id_field="id", search_field="name", type="match", service_url="http://localhost:8000/", storage='dict'):
-        """Initiate the ReconcileEngine. source is either a dictionary or a CSV file
+        """Initiate the ReconcileEngine. source is a list of dictionaries/lists
         """
         
         # the field the will be searched by default
@@ -46,6 +46,10 @@ class ReconcileEngine:
         self.storage.close()
         
     def service_spec(self):
+        """Return the default service specification
+        
+        Specification found here: https://github.com/OpenRefine/OpenRefine/wiki/Reconciliation-Service-API#service-metadata
+        """
         service_url = self.url
         return {
             "name": "CSV Reconciliation Service",
@@ -74,6 +78,10 @@ class ReconcileEngine:
         }
         
     def suggest(self, q):
+        """Use the suggest API
+        
+        Currently doesn't work
+        """
     
         prefix = q["prefix"]
         q["query"] = q["prefix"] + "*"
@@ -87,6 +95,8 @@ class ReconcileEngine:
         }
         
     def query(self, q):
+        """Fetch a user query from the storage and return in the correct format
+        """
     
         # create a query and get the results from the storage engine
         q = ReconcileQuery(q)
@@ -123,6 +133,8 @@ class ReconcileEngine:
         return q.results
         
     def queries(self, qs):
+        """Allow multiple queries to be returned
+        """
         
         qs = ReconcileQueries(qs)
         for k,q in qs.queries.iteritems():
@@ -130,6 +142,8 @@ class ReconcileEngine:
         return qs.results
         
     def view(self, id):
+        """ Not yet implemented - should return a nice HTML view of the result
+        """
         return getattr(self, id)
         
     def __getattr__(self, name):
@@ -137,13 +151,19 @@ class ReconcileEngine:
             return self.storage.all()
     
         results = self.storage.__getattr__(name)
+        
         if(len(results)>0):
-            return results[0].fields()
+            return results
         else:
             raise AttributeError("ReconcileEngine instance has no attribute '%s'" % name)
 
 class ReconcileQuery:
-
+    """
+    Construct a query based on data provided by the user
+    
+    Can either take a string, or a dictionary with various properties
+    """
+    
     def __init__(self, q):
         defaults = {
             "query":"",
@@ -168,11 +188,16 @@ class ReconcileQuery:
         self.results = {"result":[]}
         
     def add_result(self, r):
+        """ Add a result to the list of results
+        """
+    
         if(self.limit and self.limit<len(self.results["result"])):
             return
         self.results["result"].append(r)
         
 class ReconcileQueries:
+    """ Holds multiple queries
+    """
 
     def __init__(self,qs):
         self.results = {}
@@ -182,6 +207,8 @@ class ReconcileQueries:
         self.results[k] = q
             
 class ReconcileStorageDict:
+    """ Default storage/retrieval engine - holds the data as key:value dictionaries
+    """
 
     def __init__(self, source, search_field, id_field):
     
@@ -209,6 +236,9 @@ class ReconcileStorageDict:
         self.__exit__()
     
     def search(self, q):
+        """ Search for a query string in the dictionary
+        """
+    
         query_string = self.normalise_name(q.query)
         results = []
         matches = []
@@ -217,7 +247,7 @@ class ReconcileStorageDict:
         if( query_string in self.docs ):
             r = ReconcileHit( self.docs[query_string], 100 )
             results.append( r )
-            matches.append( self.docs[query_string] )
+            matches.append( self.docs[query_string] ) 
         
         # otherwise iterate through all the docs and return anything containing the query
         for i in self.docs:
@@ -230,7 +260,9 @@ class ReconcileStorageDict:
         return results
         
     def all(self):
-        return self.docs
+        """ return all the values
+        """
+        return list(self.docs)
         
     def __getattr__(self, name):
         for i in self.docs:
@@ -240,6 +272,10 @@ class ReconcileStorageDict:
         raise AttributeError("ReconcileStorageDict instance has no attribute '%s'" % name)
     
     def normalise_name(self, str, options={}):
+        """ Produce a normalised string from a given string, to remove
+            the influence of lower/upper-case etc on matching
+        """
+    
         import re, string
 
         default_options = {
@@ -303,6 +339,8 @@ class ReconcileStorageDict:
         return str                                  # return the normalised string
             
 class ReconcileStorageWhoosh( ReconcileStorageDict ):
+    """ Storage/retrieval engine using the Whoosh library
+    """
 
     def __init__(self, source, search_field, id_field):
     
@@ -374,6 +412,8 @@ class ReconcileStorageWhoosh( ReconcileStorageDict ):
             raise AttributeError("ReconcileStorageWhoosh instance has no attribute '%s'" % name)
 
 class ReconcileHit:
+    """ Class holding a possible reconciliation result
+    """
     
     def __init__(self, result, score=100):
         self.result = result
@@ -395,6 +435,8 @@ class ReconcileHit:
         raise AttributeError("ReconcileHit instance has no attribute '%s'" % name)
            
 def get_from_csv(csv_file, header_row=True, delimiter=","):
+    """ Turn a CSV file into a list of dicts/lists
+    """
 
     source = []
     
@@ -426,11 +468,14 @@ def main():
 
     args = parser.parse_args()
 
+    # URL that will host the reconciliation service
     service_url = "http://" + args.host + ":" + str(args.port) + "/"
     if args.debug: print "Reconciliation service starting on:", service_url
     
+    # get the data from the CSV file
     source = get_from_csv( args.csv, header_row = args.header_row, delimiter = args.delimiter )
     
+    # Start the reconciliation engine and the bottle service
     with ReconcileEngine(source=source, 
         id_field=args.id_field, 
         search_field=args.search_field, 
@@ -441,9 +486,13 @@ def main():
         @bottle.get('/')
         @bottle.post('/')
         def index():
+            """ Index of the server. If ?query or ?queries used then search,
+                otherwise return the default response as JSON
+            """
             
             query = bottle.request.params.query or None
             
+            # try fetching the query as json data or a string
             if query:
                 try:
                     query = json.loads(query)
@@ -457,24 +506,35 @@ def main():
                 queries = json.loads(queries, object_pairs_hook=OrderedDict)
                 return r.queries(queries)
                 
+            # if we're doing a callback request then do that
             if(bottle.request.query.callback):
                 bottle.response.content_type = "application/javascript"
                 return "%s(%s)" % (bottle.request.query.callback, r.service_spec())
                 
+            # otherwise just return the service specification
             return r.service_spec()
         
         @bottle.route('/view/<id>')
         def view(id):
-            return getattr(r,id)
+            """ a view of a particular item - should be an HTML page
+                @todo implement HTML view
+            """
+            return r.view( id )
         
         @bottle.route('/suggest')
         def suggest():
+            """ suggest API, not sure if this works
+            """
             prefix = bottle.request.query.prefix or None
             if(prefix):
                 return r.suggest({"prefix":prefix})
         
         @bottle.route('/data')
+        @bottle.route('/all')
         def data():
+            """ return all records
+                @todo paginate for long records
+            """
             bottle.response.content_type = "application/json"
             return json.dumps(r.source)
 

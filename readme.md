@@ -23,7 +23,19 @@ Usage
 		
 		python reconcile.py /path/to/csv/file.csv
 		
-3. Open your web browser to <http://localhost:8080/> to see the service specification. You can add this as a reconciliation service in OpenRefine.
+3. Open your web browser to <http://localhost:8080/> to see the service specification. 
+   You can add this as a reconciliation service in OpenRefine.
+
+4. Visit <http://localhost:8080/?query=example%20query> to see an example query. 
+
+By default the reconciliation service uses a simple python dictionary to look up the 
+results - the names are normalised and stored as keys, and the ids are returned based
+on normalising the query.
+
+To use the "whoosh" library, with more advanced indexing and fuzzy matching, then set
+the `--storage` value to `whoosh` like so:
+
+		python reconcile.py --storage whoosh /path/to/csv/file.csv
 
 Command line arguments
 ----------------------
