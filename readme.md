@@ -1,7 +1,9 @@
 python-reconcile-csv
 ====================
 
-Reconciliation engine for CSV files, for use with services like [OpenRefine](http://openrefine.org/). Concept based on the OKFN [reconcile-csv](http://okfnlabs.org/reconcile-csv/) project, but implemented in python rather than java.
+Reconciliation engine for CSV files, for use with services like [OpenRefine](http://openrefine.org/). 
+Concept based on the OKFN [reconcile-csv](http://okfnlabs.org/reconcile-csv/) project, 
+but implemented in python rather than java.
 
 Requirements
 ------------
@@ -35,8 +37,11 @@ on normalising the query.
 To use the "whoosh" library, with more advanced indexing and fuzzy matching, then set
 the `--storage` value to `whoosh` like so:
 
-		python reconcile.py --storage whoosh /path/to/csv/file.csv
+	python reconcile.py --storage whoosh /path/to/csv/file.csv
 
+The server also allows you to view an individual record at <http://localhost:8080/view/ITEMID>
+or view all the records at <http://localhost:8080/data.html>.
+		
 Command line arguments
 ----------------------
 
@@ -58,7 +63,8 @@ Command line arguments
 
 - `-id`, `--id_field`
   
-  [default="id"] ID field in the CSV file. Can be a string column name or int column position.
+  [default="id"] ID field in the CSV file. Can be a string column name or int column 
+  position.
   
 - `-t`, `--type`
   
@@ -66,7 +72,8 @@ Command line arguments
   
 - `-s`, `--search_field`
   
-  [default="name"] Field in the CSV file which will be used. Can be a string column name or int column position.
+  [default="name"] Field in the CSV file which will be used. Can be a string column 
+  name or int column position.
   
 - `--storage`
   
@@ -75,3 +82,7 @@ Command line arguments
 - `--debug`
   
   Debug mode (autoreloads the server)
+  
+- `--name`
+
+  [default="CSV Reconciliation Service"] Name of the reconciliation service
