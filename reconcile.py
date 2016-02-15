@@ -38,13 +38,15 @@ def main():
     parser.add_argument('-s', '--search_field', default="name", help='Field in the CSV file which will be used')
     parser.add_argument('--storage', default="dict", help='Which type of storage to use')
     parser.add_argument('--debug', action='store_true', dest="debug", help='Debug mode (autoreloads the server)')
+    parser.add_argument('--name', default="CSV Reconciliation Service", help='Name of the reconciliation service')
     parser.set_defaults(header_row=True, debug=False)
 
     args = parser.parse_args()
 
     # URL that will host the reconciliation service
     service_url = "http://" + args.host + ":" + str(args.port) + "/"
-    if args.debug: print "Reconciliation service starting on:", service_url
+    if args.debug: 
+        print "Reconciliation service starting on:", service_url
     
     # get the data from the CSV file
     source = get_from_csv( args.csv, header_row = args.header_row, delimiter = args.delimiter )
@@ -58,7 +60,8 @@ def main():
         id_field=args.id_field, 
         search_field=args.search_field, 
         service_url = service_url,
-        storage = storage
+        storage = storage,
+        name = args.name,
         ) as r:
         
         @bottle.get('/')
@@ -95,9 +98,11 @@ def main():
         @bottle.route('/view/<id>')
         def view(id):
             """ a view of a particular item - should be an HTML page
-                @todo implement HTML view
             """
-            return r.view( id )
+            return bottle.template('result.html', 
+                result=r.view( id ),
+                id_field=args.id_field
+                )
         
         @bottle.route('/suggest')
         def suggest():
@@ -107,6 +112,22 @@ def main():
             if(prefix):
                 return r.suggest({"prefix":prefix})
         
+        @bottle.route('/data.html')
+        @bottle.route('/all.html')
+        def data():
+            """ return all records
+                @todo paginate for long records
+            """
+            docs = r.source
+            headers = r.source[0].keys()
+            
+            return bottle.template('results.html', 
+                result=docs,
+                id_field=args.id_field,
+                headings= headers,
+                page_title=args.name
+                )
+        
         @bottle.route('/data')
         @bottle.route('/all')
         def data():
@@ -115,6 +136,12 @@ def main():
             """
             bottle.response.content_type = "application/json"
             return json.dumps(r.source)
+        
+        @bottle.route('/static/<filename:path>')
+        def send_static(filename):
+            """ if we need static files
+            """
+            return bottle.static_file(filename, root='./static')
 
         bottle.run(host=args.host, port=args.port, reloader=args.debug)        
         

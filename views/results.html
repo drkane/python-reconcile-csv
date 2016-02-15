@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<link href="/static/entireframework.min.css" rel="stylesheet" type="text/css" />
+		<title>{{ page_title }}</title>
+	</head>
+	<body>
+		<div class="container">
+			<h2>{{ page_title }}</h2>
+			<table class="table">
+				<thead>
+					<tr>
+						<th>ID</th>
+						% for col in headings:
+							% if col != id_field:
+						<th>{{ col }}</th>
+							% end
+						% end
+					</tr>
+				</thead>
+				% for row in result:
+				<tr>
+					<th>{{ row[id_field] }}</th>
+					% for col in headings:
+						% if col != id_field:
+					<td>{{ row[col] }}</td>
+						% end
+					% end
+				</tr>
+				% end
+			</table>
+		</div>
+	</body>
+</html>
