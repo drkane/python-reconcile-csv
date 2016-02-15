@@ -9,7 +9,7 @@ class ReconcileEngine:
     Search storage can be specified with the `storage` parameter
     """
 
-    def __init__(self, source=None, id_field="id", search_field="name", type="match", service_url="http://localhost:8000/", storage=None):
+    def __init__(self, source=None, id_field="id", search_field="name", type="match", service_url="http://localhost:8000/", storage=None, name="CSV Reconciliation Service"):
         """Initiate the ReconcileEngine. source is a list of dictionaries/lists
         """
         default_storage = ReconcileStorageDict
@@ -24,6 +24,8 @@ class ReconcileEngine:
         self.type = type
         # the url of the service
         self.url = service_url
+        # the name of the reconciliation
+        self.name = name
             
         # setup the storage
         self.storage = storage(source, search_field, id_field)
@@ -41,7 +43,7 @@ class ReconcileEngine:
         """
         service_url = self.url
         return {
-            "name": "CSV Reconciliation Service",
+            "name": self.name,
             "identifierSpace": "http://rdf.freebase.com/ns/type.object.id",
             "schemaSpace": "http://rdf.freebase.com/ns/type.object.id",
             "view": {
