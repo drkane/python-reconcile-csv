@@ -67,7 +67,7 @@ class ReconcileStorageDict:
         
         raise AttributeError("ReconcileStorageDict instance has no attribute '%s'" % name)
     
-    def normalise_name(self, str, options={}):
+    def normalise_name(self, s, options={}):
         """ Produce a normalised string from a given string, to remove
             the influence of lower/upper-case etc on matching
         """
@@ -91,47 +91,47 @@ class ReconcileStorageDict:
             if( key not in options):
                 options[key] = default_options[key]
                 
-        str = str.lower()                           # make the string lowercase
-        str = str.replace("&"," and ")              # replace any ampersands with " and "
+        s = s.lower()                           # make the string lowercase
+        s = s.replace("&"," and ")              # replace any ampersands with " and "
         
         # if we've chosen to remove brackets
         if(options["rembrackets"]):
             preg_brackets = r'\([^)]*\)'            # regex expression for brackets
-            str = re.sub( preg_brackets, "", str)   # replace any text in the brackets
+            s = re.sub( preg_brackets, "", s)   # replace any text in the brackets
         
-        str = str.replace("'","")                   # replace any apostrophes
+        s = s.replace("'","")                   # replace any apostrophes
         preg_nonalpha = r'[^a-zA-Z0-9 ]'            # regex expression for non-alphabetic characters
-        str = re.sub( preg_nonalpha, "", str)       # replace any non-alphanumeric characters with a space
+        s = re.sub( preg_nonalpha, "", s)       # replace any non-alphanumeric characters with a space
         
         # if we've chosen to replace specific words in the string
         if( options["replacewords"] ):
             # for each word, remove it from end, beginning or middle as specified
             for w in options["words"]:
-                if( isinstance(w, basestring) ):
+                if( isinstance(w, str) ):
                     w = {"type":"middle", "name":w}
                 if( w["type"]=="end" ):
-                    if( str.endswith( w["name"] ) ):
-                        str = str[:-len( w["name"] )]
+                    if( s.endswith( w["name"] ) ):
+                        s = s[:-len( w["name"] )]
                 elif( w["type"]=="middle" ):
-                    str = str.replace( w["name"]," ")
+                    s = s.replace( w["name"]," ")
                 else:
-                    if( str.startswith( w["name"] ) ):
-                        str = str[len( w["name"] ):]
+                    if( s.startswith( w["name"] ) ):
+                        s = s[len( w["name"] ):]
         
-        str = str.strip()                           # trim to remove any trailing spaces left over from the word removal
-        str = re.sub( r'\s+', " ", str)             # remove any double spaces
+        s = s.strip()                           # trim to remove any trailing spaces left over from the word removal
+        s = re.sub( r'\s+', " ", s)             # remove any double spaces
         
         # if we're reordering the string
         if( options["reorder"] ):
-            str_array = str.split()                 # create an array with all the words in the string in it
+            str_array = s.split()                 # create an array with all the words in the string in it
             str_array = sorted(str_array)           # sort the array alphabetically
-            str = string.join(str_array)            # put the words back together again
+            s = string.join(str_array)            # put the words back together again
         
         # remove all spaces from the string
         if( options["remspaces"]):
-            str = str.replace( " ","")
+            s = s.replace( " ","")
         
-        return str                                  # return the normalised string
+        return s                                  # return the normalised string
         
         
 

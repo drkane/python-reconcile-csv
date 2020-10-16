@@ -11,7 +11,6 @@ from collections import OrderedDict
 def get_from_csv(csv_file, header_row=True, delimiter=","):
     """ Turn a CSV file into a list of dicts/lists
     """
-
     source = []
     
     with open(csv_file, 'r') as f:
@@ -46,7 +45,7 @@ def main():
     # URL that will host the reconciliation service
     service_url = "http://" + args.host + ":" + str(args.port) + "/"
     if args.debug: 
-        print "Reconciliation service starting on:", service_url
+        print("Reconciliation service starting on: {}".format(service_url))
     
     # get the data from the CSV file
     source = get_from_csv( args.csv, header_row = args.header_row, delimiter = args.delimiter )

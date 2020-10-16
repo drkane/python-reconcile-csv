@@ -166,7 +166,7 @@ class ReconcileQuery:
         }
     
         # if the query is a string then construct an object
-        if( isinstance( q, basestring ) ):
+        if( isinstance( q, str ) ):
             q = {"query":q}
             
         # get the values, using defaults if needed
