@@ -1,6 +1,15 @@
 python-reconcile-csv
 ====================
 
+**UPDATE**
+
+This repository has not been updated for python 3. An alternative could be to convert your 
+CSV file to an sqlite table using [csvs-to-sqlite](https://github.com/simonw/csvs-to-sqlite) and 
+then use [datasette](https://docs.datasette.io/en/stable/) and the [datasette-reconcile](https://github.com/drkane/datasette-reconcile/)
+plugin to serve a Reconciliation Service API.
+
+-------
+
 Reconciliation engine for CSV files, for use with services like [OpenRefine](http://openrefine.org/). 
 Concept based on the OKFN [reconcile-csv](http://okfnlabs.org/reconcile-csv/) project, 
 but implemented in python rather than java.
